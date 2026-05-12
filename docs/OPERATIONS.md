@@ -119,18 +119,33 @@ These prevent an attacker who somehow got write access to a branch from sneaking
 
 ### G2. Verify the SHA-pinned third-party actions
 
-Before the first push, open `.github/workflows/distribute.yml` and `pages.yml` and for each pinned action SHA, verify it maps to the documented release:
+Before the first push (and any time you bump action versions), verify each pinned SHA against its published tag. Currently pinned (all Node 24-compatible):
+
+| Action | Tag | SHA |
+|---|---|---|
+| `actions/checkout` | v6.0.2 | `de0fac2e4500dabe0009e67214ff5f5447ce83dd` |
+| `actions/setup-node` | v6.4.0 | `48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e` |
+| `actions/configure-pages` | v6.0.0 | `45bfe0192ca1faeb007ade9deae92b16b8254a0d` |
+| `actions/upload-pages-artifact` | v5.0.0 | `fc324d3547104276b827a68afc52ff2a11cc49c9` |
+| `actions/deploy-pages` | v5.0.0 | `cd2ce8fcbc39b97be8ca5fce6e763baed58fa128` |
+| `actions/github-script` | v9.0.0 | `3a2844b7e9c422d3c10d287c895573f7108da1b3` |
+
+To verify a SHA matches the tag from the upstream repo:
 
 ```bash
-# Example: confirm actions/checkout SHA b4ffde65… is v4.1.1
-curl -s https://api.github.com/repos/actions/checkout/git/refs/tags/v4.1.1 \
-  | jq -r .object.sha
-# should print: b4ffde65f46336ab88eb53be808477a3936bae11
+# Example: confirm actions/checkout v6.0.2 → de0fac2e…
+gh api repos/actions/checkout/git/refs/tags/v6.0.2 --jq '.object | if .type=="tag" then .url else .sha end'
+# If output is a URL (annotated tag), follow it:
+gh api <that-url> --jq .object.sha
 ```
 
-Repeat for: `actions/setup-node`, `actions/configure-pages`, `actions/upload-pages-artifact`, `actions/deploy-pages`, `actions/github-script`. If any SHA differs, do not push until the discrepancy is investigated.
+Or via curl + jq if you don't have `gh`:
 
-When you next bump a workflow's action version, re-verify the new SHA the same way.
+```bash
+curl -s https://api.github.com/repos/actions/checkout/git/refs/tags/v6.0.2 | jq -r '.object.sha'
+```
+
+Repeat for each row. The SHAs must match exactly. If any differ, investigate before pushing — a maintainer or attacker may have re-tagged.
 
 ### H. First successful tick
 
