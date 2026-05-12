@@ -1,0 +1,106 @@
+name: Distribute storage rewards
+
+# ---------------------------------------------------------------------------
+# Hourly cron + manual dispatch. Triggers ONLY on schedule and workflow_dispatch
+# — never on PR events. Secrets are exposed only to runs targeting `main`.
+# Pull requests from forks do not get access to secrets (this is GitHub's
+# default behavior; we just must avoid the `pull_request_target` trigger).
+# ---------------------------------------------------------------------------
+
+on:
+  schedule:
+    # Hourly at minute 0 UTC. GH Actions cron can be delayed up to ~30 min;
+    # acceptable for 12h-period distributions. Catch-up logic in the code
+    # processes ALL backlogged periods on each tick.
+    - cron: "0 * * * *"
+  workflow_dispatch: {}
+
+# Top-level permissions are read-only by default; the commit step elevates
+# to `contents: write` via permissions on that job below.
+permissions:
+  contents: read
+
+# Never run two ticks in parallel — could double-spend if a long-running tick
+# overlaps the next cron firing.
+concurrency:
+  group: distribute
+  cancel-in-progress: false
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    # GitHub Environment scoping so the secret is only exposed to runs that
+    # the environment's deployment-branch rule permits (we restrict to `main`).
+    # Configure the environment under repo Settings -> Environments -> production
+    # with "Deployment branches and tags" -> "Selected branches" -> main.
+    environment: production
+    permissions:
+      contents: write
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        # actions/checkout@v4.1.1 — pinned to commit SHA (not tag). Update SHA
+        # only after reviewing the action's release notes for the target version.
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # Need history so we can commit + push state updates.
+          fetch-depth: 0
+
+      - name: Setup Node
+        # actions/setup-node@v4.0.0 — pinned SHA.
+        uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install
+        run: npm ci
+
+      - name: Run tick
+        env:
+          OPERATOR_PRIVATE_KEY: ${{ secrets.OPERATOR_PRIVATE_KEY }}
+          BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
+          SKALE_RPC_URL: ${{ secrets.SKALE_RPC_URL }}
+          ALLOWED_SUBMITTERS: ${{ vars.ALLOWED_SUBMITTERS }}
+          DRY_RUN: "false"
+          LOG_LEVEL: ${{ vars.LOG_LEVEL || 'info' }}
+        run: npm run tick
+
+      - name: Commit state changes
+        if: success()
+        run: |
+          git config user.name "storage-reward-distributor[bot]"
+          git config user.email "${{ github.repository_owner }}+bot@users.noreply.github.com"
+          git add state/
+          if git diff --cached --quiet; then
+            echo "no state changes"
+          else
+            git commit -m "state: tick $(date -u +%Y-%m-%dT%H:%M:%SZ) [skip ci]"
+            # retry once on push race (state may have been updated meanwhile)
+            for i in 1 2 3; do
+              if git push; then
+                exit 0
+              fi
+              echo "push failed (attempt $i); pulling and retrying"
+              git pull --rebase --autostash || true
+              sleep 5
+            done
+            echo "::error::Failed to push state changes after 3 attempts"
+            exit 1
+          fi
+
+      - name: Open failure issue
+        if: failure()
+        # actions/github-script@v7.0.1 — pinned SHA.
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const title = `Distributor tick failed at ${new Date().toISOString()}`;
+            const body = [
+              `Workflow run: ${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`,
+              ``,
+              `Investigate the log; if needed re-run the workflow manually via Actions -> Distribute storage rewards -> Run workflow.`,
+            ].join('\n');
+            await github.rest.issues.create({ owner, repo, title, body, labels: ['distributor-failure'] });

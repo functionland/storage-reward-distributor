@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="referrer" content="no-referrer" />
+    <!--
+      Content-Security-Policy:
+        Restricts what the page can load/connect to. Defense against a future
+        dependency exfiltrating the sessionStorage PAT to an attacker server.
+        - script-src 'self': no inline scripts, no third-party JS
+        - connect-src: only GitHub APIs (Contents API and raw.githubusercontent)
+        - style-src 'unsafe-inline': Vite injects critical CSS inline; acceptable
+          since CSS can't exfiltrate secrets the way JS can.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; connect-src 'self' https://api.github.com https://raw.githubusercontent.com; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; base-uri 'self'; form-action 'none'; frame-ancestors 'none'"
+    />
+    <title>Storage Reward Distributor</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
