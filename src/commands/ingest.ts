@@ -4,6 +4,7 @@
  * as full distributions, then clears the inbox.
  */
 import { execSync } from "node:child_process";
+import path from "node:path";
 import { ulid } from "ulid";
 import { parseUnits } from "ethers";
 import type { InboxEntry, Distribution } from "../domain/distribution.js";
@@ -38,13 +39,22 @@ interface ValidationContext {
  * the username out. Returns null when there's no git history (first run) or
  * when git is unavailable.
  *
+ * The git query runs against the directory containing `inbox.json` (which may
+ * be a separate checkout of the `state-data` branch, not the same repo where
+ * the source code lives). We resolve the inbox file's containing directory
+ * dynamically via STATE_DIR, then run `git log` from there.
+ *
  * THIS IS THE AUTHORITATIVE SOURCE of "who submitted this inbox entry" — the
  * `submittedBy` field in the JSON is operator-supplied (via UI) and could be
  * lied about by a stolen PAT used by someone outside the allowlist.
  */
 function lastInboxCommitter(): string | null {
   try {
-    const email = execSync("git log -1 --pretty=format:%ce -- state/inbox.json", {
+    const stateDir = process.env.STATE_DIR
+      ? path.resolve(process.env.STATE_DIR)
+      : path.resolve(process.cwd(), "state");
+    const email = execSync("git log -1 --pretty=format:%ce -- inbox.json", {
+      cwd: stateDir,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
     }).trim();

@@ -24,7 +24,9 @@ export function getRepoCoords(): RepoCoords {
   return {
     owner: import.meta.env.VITE_REPO_OWNER || inferOwnerFromPathname(),
     repo: import.meta.env.VITE_REPO_NAME || inferRepoFromPathname(),
-    branch: "main",
+    // State files live on the unprotected `state-data` branch, NOT on main.
+    // See docs/OPERATIONS.md ("State branch setup") for the rationale.
+    branch: "state-data",
   };
 }
 

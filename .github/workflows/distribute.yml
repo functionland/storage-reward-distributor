@@ -3,25 +3,28 @@ name: Distribute storage rewards
 # ---------------------------------------------------------------------------
 # Hourly cron + manual dispatch. Triggers ONLY on schedule and workflow_dispatch
 # — never on PR events. Secrets are exposed only to runs targeting `main`.
-# Pull requests from forks do not get access to secrets (this is GitHub's
-# default behavior; we just must avoid the `pull_request_target` trigger).
+# ---------------------------------------------------------------------------
+#
+# STATE LIVES ON A SEPARATE BRANCH (`state-data`).
+#
+# Why: `main` is protected with strict rules (require PR, CodeQL, signed
+# commits). The bot can't satisfy any of those — so we write state to an
+# UNPROTECTED branch instead. Two checkouts:
+#   • src-repo/      → main branch (source code, read-only here)
+#   • state-branch/  → state-data branch (state JSON, bot reads + writes)
+#
+# This keeps `main` maximally strict for humans while letting the cron operate
+# unattended on the state branch. See docs/OPERATIONS.md "State branch setup".
 # ---------------------------------------------------------------------------
 
 on:
   schedule:
-    # Hourly at minute 0 UTC. GH Actions cron can be delayed up to ~30 min;
-    # acceptable for 12h-period distributions. Catch-up logic in the code
-    # processes ALL backlogged periods on each tick.
     - cron: "0 * * * *"
   workflow_dispatch: {}
 
-# Top-level permissions are read-only by default; the commit step elevates
-# to `contents: write` via permissions on that job below.
 permissions:
   contents: read
 
-# Never run two ticks in parallel — could double-spend if a long-running tick
-# overlaps the next cron firing.
 concurrency:
   group: distribute
   cancel-in-progress: false
@@ -29,35 +32,53 @@ concurrency:
 jobs:
   tick:
     runs-on: ubuntu-latest
-    # GitHub Environment scoping so the secret is only exposed to runs that
-    # the environment's deployment-branch rule permits (we restrict to `main`).
-    # Configure the environment under repo Settings -> Environments -> production
-    # with "Deployment branches and tags" -> "Selected branches" -> main.
     environment: production
     permissions:
-      contents: write
+      contents: write   # for pushing to state-data branch
+      issues: write     # for the failure-issue creation step
     timeout-minutes: 20
     steps:
-      - name: Checkout
-        # actions/checkout@v4.1.1 — pinned to commit SHA (not tag). Update SHA
-        # only after reviewing the action's release notes for the target version.
+      # 1. Source code (read-only from this branch's perspective)
+      - name: Checkout source (main)
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
         with:
+          ref: main
+          path: src-repo
           token: ${{ secrets.GITHUB_TOKEN }}
-          # Need history so we can commit + push state updates.
+
+      # 2. State branch — fetch separately so we can commit + push to it
+      #    independently of main.
+      - name: Checkout state-data branch
+        id: state-checkout
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          ref: state-data
+          path: state-branch
+          token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
+        continue-on-error: true
+
+      # 3. If state-data branch doesn't exist yet, fail loudly with a hint.
+      #    The branch must be created once during setup (see OPERATIONS.md).
+      - name: Verify state-data branch exists
+        if: steps.state-checkout.outcome != 'success'
+        run: |
+          echo "::error::state-data branch is missing. Create it once with the procedure in docs/OPERATIONS.md (search for 'State branch setup')."
+          exit 1
 
       - name: Setup Node
-        # actions/setup-node@v4.0.0 — pinned SHA.
         uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
         with:
           node-version: "20"
           cache: "npm"
+          cache-dependency-path: src-repo/package-lock.json
 
       - name: Install
+        working-directory: src-repo
         run: npm ci
 
       - name: Run tick
+        working-directory: src-repo
         env:
           OPERATOR_PRIVATE_KEY: ${{ secrets.OPERATOR_PRIVATE_KEY }}
           BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
@@ -65,10 +86,14 @@ jobs:
           ALLOWED_SUBMITTERS: ${{ vars.ALLOWED_SUBMITTERS }}
           DRY_RUN: "false"
           LOG_LEVEL: ${{ vars.LOG_LEVEL || 'info' }}
+          # Point the tick command's STATE_DIR at the state-data checkout.
+          # The command's loadState/saveState/loadInbox/clearInbox honor this.
+          STATE_DIR: ${{ github.workspace }}/state-branch/state
         run: npm run tick
 
-      - name: Commit state changes
+      - name: Commit state changes to state-data branch
         if: success()
+        working-directory: state-branch
         run: |
           git config user.name "storage-reward-distributor[bot]"
           git config user.email "${{ github.repository_owner }}+bot@users.noreply.github.com"
@@ -77,13 +102,12 @@ jobs:
             echo "no state changes"
           else
             git commit -m "state: tick $(date -u +%Y-%m-%dT%H:%M:%SZ) [skip ci]"
-            # retry once on push race (state may have been updated meanwhile)
             for i in 1 2 3; do
-              if git push; then
+              if git push origin state-data; then
                 exit 0
               fi
               echo "push failed (attempt $i); pulling and retrying"
-              git pull --rebase --autostash || true
+              git pull --rebase --autostash origin state-data || true
               sleep 5
             done
             echo "::error::Failed to push state changes after 3 attempts"
@@ -92,7 +116,6 @@ jobs:
 
       - name: Open failure issue
         if: failure()
-        # actions/github-script@v7.0.1 — pinned SHA.
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
         with:
           script: |
