@@ -76,6 +76,36 @@ This scopes the `OPERATOR_PRIVATE_KEY` secret so it's only exposed to workflow r
 
 Repo → Settings → Pages → Build and deployment → Source: **GitHub Actions**. Push to `main` and the `pages.yml` workflow will publish to `https://<owner>.github.io/<repo>/`.
 
+### F2. State branch setup (REQUIRED, one-time)
+
+State files (`state/distributions.json` and `state/inbox.json`) live on a separate **`state-data`** branch — NOT on `main`. This lets the cron commit state updates freely while `main` stays maximally strict (CodeQL, PR-required, signed commits, etc. — for human commits only).
+
+Create the branch once:
+
+```bash
+cd <your-local-clone>
+git checkout main
+git pull
+# Create an orphan branch with NO history from main
+git checkout --orphan state-data
+# Clear everything except the state/ directory
+git rm -rf --cached . 2>/dev/null || true
+find . -maxdepth 1 ! -name . ! -name .git ! -name state -exec rm -rf {} \;
+# Add a tiny README so the branch isn't visually empty
+echo "# state-data — managed by storage-reward-distributor" > README.md
+echo "" >> README.md
+echo "This branch contains the distributor's runtime state. The hourly cron commits here; do NOT edit manually except during incident recovery (see docs/OPERATIONS.md on main)." >> README.md
+git add state/ README.md
+git commit -m "init state-data branch"
+git push -u origin state-data
+# Return to main
+git checkout main
+```
+
+**Make the state-data branch unprotected.** The repo's ruleset(s) typically apply only to `main` — verify under Settings → Rules. If you have an "all branches" ruleset, exclude `state-data` from it. The bot needs to push freely here.
+
+The UI reads + writes state on `state-data` via the GitHub Contents API. The workflow checks out both branches into separate directories and points the tick command at the state-data checkout via the `STATE_DIR` env var.
+
 ### G. Branch protection on `main`
 
 Repo → Settings → Branches → Add rule → `main`:

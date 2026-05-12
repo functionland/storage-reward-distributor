@@ -6,7 +6,13 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { Inbox } from "../domain/distribution.js";
 
-const STATE_DIR = path.resolve(process.cwd(), "state");
+/**
+ * Inbox lives alongside the state file. Same STATE_DIR override applies.
+ * See `state.ts` for the override rationale.
+ */
+const STATE_DIR = process.env.STATE_DIR
+  ? path.resolve(process.env.STATE_DIR)
+  : path.resolve(process.cwd(), "state");
 const INBOX_PATH = path.join(STATE_DIR, "inbox.json");
 
 const EMPTY: Inbox = { pending: [] };
