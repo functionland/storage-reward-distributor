@@ -34,7 +34,7 @@ export const CHAINS: Record<ChainName, ChainConfig> = {
     secondsPerBlock: 2,
     // Base mainnet block around RewardEngine deploy. Tune downward if you need
     // to scan further back; tune upward (closer to head) to speed scans.
-    eventScanFromBlock: 22_000_000,
+    eventScanFromBlock: 45_911_321,
   },
   skale: {
     name: "skale",
@@ -48,7 +48,7 @@ export const CHAINS: Record<ChainName, ChainConfig> = {
     // to parallel RPC calls if undefined. Verify at impl time and set if available.
     multicall3: undefined,
     secondsPerBlock: 3,
-    eventScanFromBlock: 5_000_000,
+    eventScanFromBlock: 25_613_279,
   },
 };
 
