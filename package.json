@@ -19,8 +19,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "tsc -p tsconfig.json --noEmit",
-    "web:dev": "pnpm --filter @app/web dev",
-    "web:build": "pnpm --filter @app/web build"
+    "web:dev": "npm run dev --workspace @app/web",
+    "web:build": "npm run build --workspace @app/web"
   },
   "dependencies": {
     "ethers": "^6.13.0",

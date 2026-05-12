@@ -40,20 +40,20 @@ See [`docs/OPERATIONS.md`](docs/OPERATIONS.md) for full operator procedures incl
 ## Local development
 
 ```bash
-# Install
-pnpm install   # or npm install
+# Install (uses npm workspaces — installs root + apps/web deps in one shot)
+npm install
 
 # Copy env template and fill
 cp .env.example .env
 
 # Run a dry-run tick (no transactions sent)
-pnpm run dry-run
+npm run dry-run
 
 # Unit tests
-pnpm test
+npm test
 
 # Web UI dev server
-pnpm run web:dev
+npm run web:dev
 ```
 
 ## Security
