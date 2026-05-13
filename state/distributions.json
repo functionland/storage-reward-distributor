@@ -1,8 +1,29 @@
 {
   "schemaVersion": 1,
-  "distributions": [],
+  "distributions": [
+    {
+      "id": "01KRHQD9KGNRXF44EF56D0HCSA",
+      "createdAt": 1778711438,
+      "totalAmountWei": "100000000000000000000",
+      "numPeriods": 2,
+      "periodDurationSec": 3600,
+      "startTimestamp": 1778711438,
+      "periodStates": [
+        {
+          "periodIndex": 0,
+          "status": "pending"
+        },
+        {
+          "periodIndex": 1,
+          "status": "pending"
+        }
+      ],
+      "submittedBy": "ehsan6sha",
+      "notes": "first test distribution of network rewards"
+    }
+  ],
   "lastTick": {
-    "ts": 1778708066,
+    "ts": 1778711438,
     "ranOnGitHub": true
   }
 }

@@ -1,13 +1,3 @@
 {
-  "pending": [
-    {
-      "submittedAt": 1778710821,
-      "submittedBy": "ehsan6sha",
-      "totalAmount": "100",
-      "numPeriods": 2,
-      "periodDurationSec": 3600,
-      "startTimestamp": "now",
-      "notes": "first test distribution of network rewards"
-    }
-  ]
+  "pending": []
 }
