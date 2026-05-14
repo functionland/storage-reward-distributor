@@ -11,11 +11,15 @@
       "periodStates": [
         {
           "periodIndex": 0,
-          "status": "pending"
+          "status": "skipped",
+          "skipReason": "no online members",
+          "processedAt": 1778719903
         },
         {
           "periodIndex": 1,
-          "status": "pending"
+          "status": "skipped",
+          "skipReason": "no online members",
+          "processedAt": 1778719903
         }
       ],
       "submittedBy": "ehsan6sha",
@@ -23,7 +27,7 @@
     }
   ],
   "lastTick": {
-    "ts": 1778714865,
+    "ts": 1778719903,
     "ranOnGitHub": true
   }
 }
